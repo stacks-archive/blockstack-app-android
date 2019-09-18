@@ -5,6 +5,12 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 
 android {
+
+    compileOptions {
+        targetCompatibility = "8"
+        sourceCompatibility = "8"
+    }
+
     compileSdkVersion 28
     defaultConfig {
         applicationId "org.blockstack.app"
@@ -41,17 +47,17 @@ dependencies {
     implementation 'com.squareup.picasso:picasso:2.71828'
     implementation 'com.github.blockstack:blockstack-android:0.4.7'
     implementation 'com.github.tobiasschuerg:android-prefix-suffix-edit-text:1.2.2'
-    implementation "com.github.walleth.kethereum:model:$kethereum_version"
-    implementation "com.github.walleth.kethereum:crypto:$kethereum_version"
-    implementation "com.github.walleth.kethereum:crypto_api:$kethereum_version"
-    implementation "com.github.walleth.kethereum:bip32:$kethereum_version"
-    implementation "com.github.walleth.kethereum:bip39:$kethereum_version"
-    implementation "com.github.walleth.kethereum:bip39_wordlist_en:$kethereum_version"
-    implementation "com.github.walleth.kethereum:bip44:$kethereum_version"
-    implementation "com.github.walleth.kethereum:wallet:$kethereum_version"
-    implementation "com.github.walleth.kethereum:keystore:$kethereum_version"
-    implementation "com.github.walleth.kethereum:crypto_impl_bouncycastle:$kethereum_version"
-    implementation "com.github.walleth.kethereum:extensions:$kethereum_version"
+    implementation "com.github.komputing.KEthereum:model:$kethereum_version"
+    implementation "com.github.komputing.KEthereum:crypto:$kethereum_version"
+    implementation "com.github.komputing.KEthereum:crypto_api:$kethereum_version"
+    implementation "com.github.komputing.KEthereum:bip32:$kethereum_version"
+    implementation "com.github.komputing.KEthereum:bip39:$kethereum_version"
+    implementation "com.github.komputing.KEthereum:bip39_wordlist_en:$kethereum_version"
+    implementation "com.github.komputing.KEthereum:bip44:$kethereum_version"
+    implementation "com.github.komputing.KEthereum:wallet:$kethereum_version"
+    implementation "com.github.komputing.KEthereum:keystore:$kethereum_version"
+    //implementation "com.github.komputing.KEthereum:crypto_impl_bouncycastle:$kethereum_version"
+    implementation "com.github.komputing.KEthereum:extensions:$kethereum_version"
     runtimeOnly 'org.bouncycastle:bcprov-jdk15on:1.62'
 
     implementation "com.github.uport-project.kotlin-did-jwt:jwt:$did_jwt_version"
