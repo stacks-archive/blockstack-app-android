@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">Blockstack</string>
+    <string name="prompt_username">Username</string>
+    <string name="action_check_username">Check availability</string>
+    <string name="action_check_username_short">Check</string>
+    <string name="welcome">"Welcome !"</string>
+    <string name="invalid_username">Not a valid username</string>
+    <string name="invalid_password">Password must be >5 characters</string>
+    <string name="login_failed">"Login failed"</string>
+    <string name="blockstack_label">Blockstack ID</string>
+    <string name="action_restore">Sign-in with existing username</string>
+    <string name="title_activity_identity">IdentityActivity</string>
+    <string name="backup">Backup</string>
+    <string name="register">Register</string>
+    <string name="logout">Remove Account</string>
+    <string name="deny">Deny</string>
+    <string name="allow">Allow</string>
+    <string name="store_write">Allow <b>%1$s</b> to read your basic info?</string>
+    <string name="email">Allow <b>%1$s</b> to use your email address?</string>
+    <string name="publish_data">Allow <b>%1$s</b> to use publish data of this app in your name?</string>
+    <string name="permissions">Blockstack Permissions</string>
+    <string name="logged_in_as">Logged In as %1$s</string>
+</resources>
