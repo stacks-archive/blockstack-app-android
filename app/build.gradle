@@ -47,21 +47,14 @@ dependencies {
     implementation 'com.squareup.picasso:picasso:2.71828'
     implementation 'com.github.blockstack:blockstack-android:0.4.7'
     implementation 'com.github.tobiasschuerg:android-prefix-suffix-edit-text:1.2.2'
-    implementation "com.github.komputing.KEthereum:model:$kethereum_version"
-    implementation "com.github.komputing.KEthereum:crypto:$kethereum_version"
-    implementation "com.github.komputing.KEthereum:crypto_api:$kethereum_version"
-    implementation "com.github.komputing.KEthereum:bip32:$kethereum_version"
-    implementation "com.github.komputing.KEthereum:bip39:$kethereum_version"
-    implementation "com.github.komputing.KEthereum:bip39_wordlist_en:$kethereum_version"
-    implementation "com.github.komputing.KEthereum:bip44:$kethereum_version"
-    implementation "com.github.komputing.KEthereum:wallet:$kethereum_version"
-    implementation "com.github.komputing.KEthereum:keystore:$kethereum_version"
-    //implementation "com.github.komputing.KEthereum:crypto_impl_bouncycastle:$kethereum_version"
-    implementation "com.github.komputing.KEthereum:extensions:$kethereum_version"
+    implementation "com.github.komputing.kethereum:bip32:$kethereum_version"
+    implementation "com.github.komputing.kethereum:bip39:$kethereum_version"
+    implementation "com.github.komputing.kethereum:bip39_wordlist_en:$kethereum_version"
+    implementation "com.github.komputing.kethereum:bip44:$kethereum_version"
     runtimeOnly 'org.bouncycastle:bcprov-jdk15on:1.62'
 
     implementation "com.github.uport-project.kotlin-did-jwt:jwt:$did_jwt_version"
-    api "com.github.uport-project.kotlin-common:core:$uport_kotlin_common_version"
+
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'androidx.test:runner:1.2.0'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
