@@ -70,6 +70,10 @@ class AuthenticatorActivity : AppCompatActivity() {
             loading.visibility = View.VISIBLE
             authenticationViewModel.registerUsername(username.text.toString() + ".id.blockstack")
         }
+
+        restore.setOnClickListener{
+            authenticationViewModel.restore(seedwords.text.toString())
+        }
     }
 
     private fun updateUiWithUser(model: LoggedInUser) {

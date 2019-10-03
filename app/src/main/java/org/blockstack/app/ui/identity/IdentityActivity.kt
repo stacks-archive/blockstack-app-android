@@ -24,7 +24,10 @@ class IdentityActivity : AppCompatActivity() {
 
 
         identityViewModel =
-            ViewModelProviders.of(this, IdentityViewModelFactory(applicationContext))
+            ViewModelProviders.of(
+                this,
+                IdentityViewModelFactory(applicationContext)
+            )
                 .get(IdentityViewModel::class.java)
 
         identityViewModel.userData.observe(this@IdentityActivity, Observer {

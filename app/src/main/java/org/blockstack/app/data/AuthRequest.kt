@@ -4,5 +4,5 @@ data class AuthRequest(
     val domain: String,
     val transitKey: String,
     val redirectUrl: String,
-    val scopes: Array<String>
+    val scopes: ArrayList<String>
 )

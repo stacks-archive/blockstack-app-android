@@ -5,7 +5,6 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import org.blockstack.app.data.AuthRepository
-import java.lang.Exception
 import java.security.InvalidParameterException
 
 class PermissionsViewModel(
@@ -16,7 +15,7 @@ class PermissionsViewModel(
     val scope: LiveData<Scope> = _scope
 
     private val _grantedPermissions = MutableLiveData<List<String>>()
-    val grantedPermissions:LiveData<List<String>> = _grantedPermissions
+    val grantedPermissions: LiveData<List<String>> = _grantedPermissions
 
     private lateinit var scopes: List<Scope>
     private var grantedPermissionList: ArrayList<String> = arrayListOf()
@@ -41,13 +40,23 @@ class PermissionsViewModel(
         }
     }
 
-    fun load(scopeStrings: Array<String>, callingPackage: String?) {
+    fun load(scopeStrings: Array<String>, callingPackage: String?, domain: String) {
 
         val packageName =
-            try {
-                context.packageManager.getPackageInfo(callingPackage, 0).applicationInfo.name
-            } catch (e:Exception) {
-                "unknown app"
+            if (callingPackage != null) {
+                try {
+                    context.packageManager.getPackageInfo(callingPackage, 0).applicationInfo.name
+                } catch (e: Exception) {
+                    "unknown app"
+                }
+            } else {
+                domain.let {
+                    if (domain.startsWith("https://")) {
+                        domain.substring(8)
+                    } else {
+                        domain
+                    }
+                }
             }
 
         scopes = scopeStrings.map { scope ->

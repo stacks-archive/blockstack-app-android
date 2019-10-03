@@ -42,6 +42,14 @@
             app:layout_constraintTop_toBottomOf="@id/username"
             app:layout_constraintVertical_bias="0.2" />
 
+    <androidx.appcompat.widget.AppCompatEditText
+            android:id="@+id/seedwords"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/register" />
+
     <Button
             android:id="@+id/restore"
             android:layout_width="wrap_content"
@@ -50,11 +58,10 @@
             android:layout_marginStart="48dp"
             android:layout_marginTop="48dp"
             android:layout_marginEnd="48dp"
-            android:enabled="false"
             android:text="@string/action_restore"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/register" />
+            app:layout_constraintTop_toBottomOf="@+id/seedwords" />
 
     <ProgressBar
             android:id="@+id/loading"

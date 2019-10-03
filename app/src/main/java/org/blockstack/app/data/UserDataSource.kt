@@ -1,41 +1,46 @@
 package org.blockstack.app.data
 
 import android.content.Context
-import org.blockstack.android.sdk.BlockstackSession
+import android.net.Uri
+import okhttp3.Call
+import okhttp3.Request
+import org.blockstack.android.sdk.Blockstack
+import org.blockstack.android.sdk.model.BlockstackAccount
 import org.blockstack.android.sdk.model.UserData
-import org.blockstack.android.sdk.model.toBlockstackConfig
+import org.json.JSONArray
 import org.json.JSONObject
-import org.kethereum.bip32.model.ExtendedKey
 import java.io.IOException
-import java.net.URL
 
 /**
  * Class that handles authentication w/ checkUsername credentials and retrieves user information.
  */
-class UserDataSource(context: Context) {
-    val session = BlockstackSession(context, "notNeeded".toBlockstackConfig(emptyArray()))
+class UserDataSource(context: Context, val callFactory: Call.Factory) {
+    val blockstack = Blockstack()
 
-    fun load(username: String, callback: (Result<UserData>) -> Unit) {
+    suspend fun load(username: String, callback: (Result<UserData>) -> Unit) {
         try {
-            val userData =
-                session.lookupProfile(username, URL("https://core.blockstack.org/v1/names/")) {
-                    if (it.hasErrors) {
-                        callback(Result.Error(Exception(it.error)))
-                    } else {
-                        val json = JSONObject()
-                        json.put("profile", it.value!!.json)
-                        json.put("username", username)
-                        val userData = UserData(json)
-                        callback(Result.Success(userData))
-                    }
-                }
+            val profile = blockstack.lookupProfile(username, null)
+
+            val json = JSONObject()
+            json.put("profile", profile.json)
+            json.put("username", username)
+            val userData = UserData(json)
+            callback(Result.Success(userData))
+
+
         } catch (e: Throwable) {
             callback(Result.Error(IOException("Error logging in", e)))
         }
     }
 
-    fun register(username: String, keys: ExtendedKey):BlockstackAccount {
-        return BlockstackAccount(username, keys)
+    fun findNames(btcAddress: String):List<String> {
+        val url = "https://core.blockstack.org/v1/addresses/bitcoin/$btcAddress"
+        val builder = Request.Builder()
+            .url(url)
+        builder.addHeader("Referrer-Policy", "no-referrer")
+        val request =  builder.build()
+        val names = JSONObject(callFactory.newCall(request).execute().body()!!.string()).getJSONArray("names")
+        return (0 until names.length()-1).map { names.getString(it)}
     }
 }
 
