@@ -3,7 +3,7 @@ package org.blockstack.app.ui.auth
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.GlobalScope
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 import org.blockstack.app.R
 import org.blockstack.app.data.AuthRepository
@@ -18,12 +18,14 @@ class AuthenticationViewModel(private val authRepository: AuthRepository) : View
     val loginResult: LiveData<LoginResult> = _loginResult
 
     fun checkUsername(username: String) {
-        authRepository.checkUsername(username) { checkResult ->
-            if (checkResult is Result.Success) {
-                _loginForm.value = LoginFormState(isUsernameAvailable = true)
-            } else {
-                _loginResult.value =
-                    LoginResult(error = R.string.invalid_username)
+        viewModelScope.launch {
+            authRepository.checkUsername(username) { checkResult ->
+                if (checkResult is Result.Success) {
+                    _loginForm.value = LoginFormState(isUsernameAvailable = true)
+                } else {
+                    _loginResult.value =
+                        LoginResult(error = R.string.invalid_username)
+                }
             }
         }
     }
@@ -53,13 +55,12 @@ class AuthenticationViewModel(private val authRepository: AuthRepository) : View
     }
 
     fun restore(text: String) {
-        GlobalScope.launch {
-            authRepository.restoreIdentity(text) { restoreResult ->
-                if (restoreResult is Result.Success) {
-                    _loginResult.value =
-                        LoginResult(LoggedInUser(displayName = restoreResult.data.username!!))
-                }
-            }
+        viewModelScope.launch {
+            val account = authRepository.restoreIdentity(text)
+            _loginResult.value =
+                LoginResult(LoggedInUser(account.displayName()))
+
         }
     }
 }
+

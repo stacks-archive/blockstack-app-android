@@ -1,13 +1,10 @@
 package org.blockstack.app.data
 
 import android.content.Context
-import android.net.Uri
 import okhttp3.Call
 import okhttp3.Request
 import org.blockstack.android.sdk.Blockstack
-import org.blockstack.android.sdk.model.BlockstackAccount
 import org.blockstack.android.sdk.model.UserData
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 
@@ -40,7 +37,7 @@ class UserDataSource(context: Context, val callFactory: Call.Factory) {
         builder.addHeader("Referrer-Policy", "no-referrer")
         val request =  builder.build()
         val names = JSONObject(callFactory.newCall(request).execute().body()!!.string()).getJSONArray("names")
-        return (0 until names.length()-1).map { names.getString(it)}
+        return (0 until names.length()).map { names.getString(it)}
     }
 }
 

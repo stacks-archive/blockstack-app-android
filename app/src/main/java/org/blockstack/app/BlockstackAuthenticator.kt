@@ -8,7 +8,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.text.TextUtils
+import org.blockstack.app.ui.FrontDoorActivity
 import org.blockstack.app.ui.auth.AuthenticatorActivity
+import org.blockstack.app.ui.identity.DeleteIdentityActivity
+import org.blockstack.app.ui.identity.IdentityActivity
 
 
 class BlockstackAuthenticator(val context: Context) : AbstractAccountAuthenticator(context) {
@@ -55,12 +58,14 @@ class BlockstackAuthenticator(val context: Context) : AbstractAccountAuthenticat
             return result
         }
 
-        val intent = Intent(context, AuthenticatorActivity::class.java)
+        val intent = Intent(context, FrontDoorActivity::class.java)
+        intent.action = FrontDoorActivity.ACTION_GET_AUTH_TOKEN
         intent.putExtra(
             AccountManager.KEY_ACCOUNT_AUTHENTICATOR_RESPONSE, response
         )
-        intent.putExtra(AuthenticatorActivity.KEY_ACCOUNT_TYPE, account.type)
-        intent.putExtra(AuthenticatorActivity.KEY_AUTH_TYPE, authTokenType)
+        intent.putExtra(FrontDoorActivity.KEY_ACCOUNT_TYPE, account.type)
+        intent.putExtra(FrontDoorActivity.KEY_AUTH_TYPE, authTokenType)
+        intent.putExtra(FrontDoorActivity.KEY_OPTIONS, options)
         val bundle = Bundle()
         bundle.putParcelable(AccountManager.KEY_INTENT, intent)
         return bundle
@@ -95,6 +100,18 @@ class BlockstackAuthenticator(val context: Context) : AbstractAccountAuthenticat
             .putExtra(AccountManager.KEY_ACCOUNT_AUTHENTICATOR_RESPONSE, response)
             .putExtra(AuthenticatorActivity.KEY_REQUIRED_FEATURES, requiredFeatures)
             .putExtra(AuthenticatorActivity.KEY_OPTIONS, options)
+        val bundle = Bundle()
+        bundle.putParcelable(AccountManager.KEY_INTENT, intent)
+        return bundle
+    }
+
+    override fun getAccountRemovalAllowed(
+        response: AccountAuthenticatorResponse?,
+        account: Account?
+    ): Bundle {
+        val intent = Intent(context, DeleteIdentityActivity::class.java)
+            .putExtra(DeleteIdentityActivity.KEY_ACCOUNT_NAME, account!!.name)
+            .putExtra(AccountManager.KEY_ACCOUNT_AUTHENTICATOR_RESPONSE, response)
         val bundle = Bundle()
         bundle.putParcelable(AccountManager.KEY_INTENT, intent)
         return bundle

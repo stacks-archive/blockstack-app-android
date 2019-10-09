@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import org.blockstack.app.R
 import org.blockstack.app.data.AuthRepository
 import java.security.InvalidParameterException
 
@@ -14,8 +15,8 @@ class PermissionsViewModel(
     private val _scope = MutableLiveData<Scope>()
     val scope: LiveData<Scope> = _scope
 
-    private val _grantedPermissions = MutableLiveData<List<String>>()
-    val grantedPermissions: LiveData<List<String>> = _grantedPermissions
+    private val _grantedPermissions = MutableLiveData<ArrayList<String>>()
+    val grantedPermissions: LiveData<ArrayList<String>> = _grantedPermissions
 
     private lateinit var scopes: List<Scope>
     private var grantedPermissionList: ArrayList<String> = arrayListOf()
@@ -76,8 +77,17 @@ class PermissionsViewModel(
                 )
             }
         }
+        if (scopeStrings.indexOf(org.blockstack.android.sdk.Scope.StoreWrite.scope) < 0) {
+            scopes = listOf(Scope(org.blockstack.android.sdk.Scope.StoreWrite.scope, context.getString(
+                R.string.store_write, packageName)))
+        }
         grantedPermissionList = arrayListOf()
         currentScopeIndex = 0
-        _scope.value = scopes[0]
+
+        if (scopes.size > 0) {
+            _scope.value = scopes[0]
+        } else {
+            _grantedPermissions.value = grantedPermissionList
+        }
     }
 }

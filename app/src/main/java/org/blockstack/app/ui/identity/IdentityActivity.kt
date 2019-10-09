@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.text.TextUtils
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProviders
@@ -47,13 +48,31 @@ class IdentityActivity : AppCompatActivity() {
             }
             name.text = userData.name
             bio.text = userData.bio
+            button.isEnabled = it.encryptedSeedWords != null
         })
 
         identityViewModel.loadCurrentUser()
 
+        button.setOnClickListener {
+            val encryptedSeedWords = identityViewModel.userData.value?.encryptedSeedWords
+            if (encryptedSeedWords != null) {
+                val sendIntent: Intent = Intent().apply {
+                    action = Intent.ACTION_SEND
+                    putExtra(Intent.EXTRA_TEXT, encryptedSeedWords)
+                    type = "text/plain"
+                }
+
+                val shareIntent = Intent.createChooser(sendIntent, null)
+                startActivity(shareIntent)
+            } else {
+                Toast.makeText(this, "no seed words", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         logout.setOnClickListener {
             identityViewModel.logout()
         }
+
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -68,5 +87,7 @@ class IdentityActivity : AppCompatActivity() {
 
     companion object {
         const val REQUEST_CODE_AUTHENTICATOR = 1
+        const val KEY_IS_DELETING_ACCOUNT = "is_deleting_account"
+        const val KEY_ACCOUNT_NAME = "account_name"
     }
 }

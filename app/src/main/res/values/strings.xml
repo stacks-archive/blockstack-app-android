@@ -20,4 +20,6 @@
     <string name="publish_data">Allow <b>%1$s</b> to use publish data of this app in your name?</string>
     <string name="permissions">Blockstack Permissions</string>
     <string name="logged_in_as">Logged In as %1$s</string>
+    <string name="blockstack_calendar">BS Calendar</string>
+    <string name="warning_before_remove">Please verify that you have made a backup of your 12 private words (password)</string>
 </resources>

@@ -6,3 +6,6 @@ data class AuthRequest(
     val redirectUrl: String,
     val scopes: ArrayList<String>
 )
+
+fun unencryptedAuthRequest(domain: String, scopes: ArrayList<String>) =
+    AuthRequest(domain, "", "", scopes)
