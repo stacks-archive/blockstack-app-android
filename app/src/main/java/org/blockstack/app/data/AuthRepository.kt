@@ -43,7 +43,7 @@ class AuthRepository private constructor(
         private set
 
     val loginStates: MutableMap<String, LoginState> = mutableMapOf()
-
+    val permissions: MutableMap<String, MutableList<Permission>> = mutableMapOf()
 
     private var accountMeta = BlockstackAccount.Companion.MetaData()
 
@@ -132,14 +132,16 @@ class AuthRepository private constructor(
 
 
     fun shouldCheckPermissions(domain: String, scopes: Array<String>): Boolean {
-        if (!loginStates.containsKey(domain)) {
+        if (!permissions.containsKey(domain)) {
             return true
         }
 
-        val permissions = loginStates.getValue(domain).permissions.map { p -> p.scope }
-        for (scope in scopes) {
-            if (!permissions.contains(scope)) {
-                return true
+        if (permissions.containsKey(domain)) {
+            val permissions = permissions.getValue(domain).map { p -> p.scope }
+            for (scope in scopes) {
+                if (!permissions.contains(scope)) {
+                    return true
+                }
             }
         }
         return false
@@ -160,6 +162,7 @@ class AuthRepository private constructor(
         } else {
             mutableListOf()
         }
+        Log.d(TAG, blockstack.decodeToken(authResponse).second.toString())
         loginStates[domain] =
             LoginState(decodedToken.second.toAuthRequest(), authResponse, permissions)
         return account!!
@@ -196,6 +199,7 @@ class AuthRepository private constructor(
                     loginStates.getValue(domain).permissions.add(Permission(scope))
                 }
             }
+            permissions[domain] = loginStates.getValue(domain).permissions
         }
     }
 

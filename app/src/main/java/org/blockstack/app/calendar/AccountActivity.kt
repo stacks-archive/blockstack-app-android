@@ -19,10 +19,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.PermissionChecker
 import kotlinx.android.synthetic.main.activity_account.*
 import kotlinx.android.synthetic.main.content_account.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import org.blockstack.android.sdk.BlockstackSignIn
 import org.blockstack.android.sdk.Scope
 import org.blockstack.android.sdk.SessionStore
@@ -36,6 +33,7 @@ import org.kethereum.extensions.toHexStringNoPrefix
 import org.openintents.calendar.sync.R
 import org.openintents.calendar.sync.blockstackConfig
 import org.openintents.distribution.about.About
+import java.lang.Runnable
 import java.net.URI
 import java.util.*
 
@@ -101,8 +99,14 @@ class AccountActivity : AppCompatActivity() {
             val authRequest =
                 signIn.makeAuthRequest(transitPrivateKey, Date().time + 3600 * 24 * 7, emptyMap())
             val decodedToken = authRepository.blockstack.decodeToken(authRequest)
-            authRepository.logUserInFor("https://cal.openintents.org", authRequest, decodedToken)
-            onLoaded()
+            withContext(Dispatchers.IO) {
+                authRepository.logUserInFor(
+                    "https://cal.openintents.org",
+                    authRequest,
+                    decodedToken
+                )
+                onLoaded()
+            }
         }
 
 
