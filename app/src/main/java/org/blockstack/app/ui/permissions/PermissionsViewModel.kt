@@ -4,9 +4,12 @@ import android.content.Context
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import org.blockstack.android.sdk.BaseScope.StoreWrite
 import org.blockstack.app.R
 import org.blockstack.app.data.AuthRepository
 import java.security.InvalidParameterException
+
+val COLLECTION_SCOPE_PREFIX = "collection."
 
 class PermissionsViewModel(
     private val authRepository: AuthRepository,
@@ -67,7 +70,11 @@ class PermissionsViewModel(
                 context.packageName
             )
             if (descriptionResId == 0) {
-                throw InvalidParameterException("$scope not supported")
+                if (scope.startsWith(COLLECTION_SCOPE_PREFIX)) {
+                 Scope(scope, scope.substring(COLLECTION_SCOPE_PREFIX.length))
+                } else {
+                    throw InvalidParameterException("$scope not supported")
+                }
             } else {
                 Scope(
                     scope,
@@ -77,14 +84,15 @@ class PermissionsViewModel(
                 )
             }
         }
-        if (scopeStrings.indexOf(org.blockstack.android.sdk.Scope.StoreWrite.scope) < 0) {
-            scopes = listOf(Scope(org.blockstack.android.sdk.Scope.StoreWrite.scope, context.getString(
+        if (scopeStrings.indexOf(StoreWrite.scope.name) < 0) {
+            scopes = listOf(Scope(
+                StoreWrite.scope.name, context.getString(
                 R.string.store_write, packageName)))
         }
         grantedPermissionList = arrayListOf()
         currentScopeIndex = 0
 
-        if (scopes.size > 0) {
+        if (scopes.isNotEmpty()) {
             _scope.value = scopes[0]
         } else {
             _grantedPermissions.value = grantedPermissionList

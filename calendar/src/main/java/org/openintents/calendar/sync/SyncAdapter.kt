@@ -23,18 +23,17 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.os.RemoteException
+import android.preference.PreferenceManager
 import android.provider.BaseColumns
 import android.provider.CalendarContract
 import android.text.TextUtils
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.newSingleThreadContext
+import org.blockstack.android.sdk.BaseScope
 import org.blockstack.android.sdk.BlockstackSession
-import org.blockstack.android.sdk.Executor
-import org.blockstack.android.sdk.Result
-import org.blockstack.android.sdk.Scope
+import org.blockstack.android.sdk.SessionStore
 import org.blockstack.android.sdk.model.BlockstackConfig
 import org.blockstack.android.sdk.model.GetFileOptions
 import org.json.JSONArray
@@ -44,7 +43,6 @@ import org.openintents.calendar.sync.model.BlockstackEventList
 import org.openintents.calendar.sync.model.LocalEvent
 import org.xmlpull.v1.XmlPullParserException
 import java.io.IOException
-import java.lang.RuntimeException
 import java.lang.String.format
 import java.net.MalformedURLException
 import java.net.URI
@@ -62,32 +60,10 @@ import kotlin.coroutines.suspendCoroutine
 
 val blockstackConfig = BlockstackConfig(
     URI.create("https://cal.openintents.org"),
-    scopes = arrayOf(Scope.StoreWrite),
+    scopes = arrayOf(BaseScope.StoreWrite.scope),
     manifestPath = "/manifest.json",
     redirectPath = "/"
 )
-val j2v8Dispatcher = newSingleThreadContext("j2v8Dispatcher")
-fun executorFactory(context: Context): Executor {
-    return object : Executor {
-        override fun onMainThread(function: (Context) -> Unit) {
-            GlobalScope.launch(Dispatchers.Main) {
-                function(context)
-            }
-        }
-
-        override fun onNetworkThread(function: suspend () -> Unit) {
-            GlobalScope.launch(j2v8Dispatcher) {
-                function()
-            }
-        }
-
-        override fun onV8Thread(function: () -> Unit) {
-            GlobalScope.launch(j2v8Dispatcher) {
-                function()
-            }
-        }
-    }
-}
 
 /**
  * Define a sync adapter for the app.
@@ -129,10 +105,12 @@ internal class SyncAdapter : AbstractThreadedSyncAdapter {
 
     fun initValues(context: Context) {
         mContentResolver = context.contentResolver
-        GlobalScope.launch(j2v8Dispatcher) {
-            mBlockstackSession =
-                BlockstackSession(context, blockstackConfig, executor = executorFactory(context))
-        }
+        mBlockstackSession =
+            BlockstackSession(
+                sessionStore = SessionStore(PreferenceManager.getDefaultSharedPreferences(context)),
+                appConfig = blockstackConfig
+            )
+
 
     }
 
@@ -156,7 +134,7 @@ internal class SyncAdapter : AbstractThreadedSyncAdapter {
     ) {
 
         Log.i(TAG, "Beginning network synchronization $extras $authority")
-        GlobalScope.launch(j2v8Dispatcher) {
+        CoroutineScope(Dispatchers.IO).launch {
             val feed = extras.getString("feed")
             val metaFeedOnly = extras.getBoolean("metafeedonly")
             if (feed != null) {
@@ -204,40 +182,45 @@ internal class SyncAdapter : AbstractThreadedSyncAdapter {
                 }
 
                 val events = suspendCoroutine<JSONObject> { cont ->
-                    val callback: (Result<Any>) -> Unit = {
-                        if (it.hasValue) {
-                            val eventsAsString = it.value as String
-                            Log.d(TAG, "events from gaia\n$eventsAsString")
-                            val events = JSONObject(eventsAsString)
-                            cont.resume(events)
-                        } else {
-                            Log.e(TAG, "Failed to fetch events: " + it.error)
-                            cont.resumeWithException(IOException(it.error!!.message))
-                        }
-                    }
-                    when (blockstackCalendar.type) {
-                        "private" -> {
-                            val path = blockstackCalendar.data.optString("src")
-                            Log.d(TAG, "events for ${blockstackCalendar.type} from $path")
-                            mBlockstackSession.getFile(path, GetFileOptions(), callback)
-                        }
-                        "blockstack-user" -> {
-                            val path = blockstackCalendar.data.optString("src")
-                            Log.d(TAG, "events for ${blockstackCalendar.type} from $path ignored")
-                            /*mBlockstackSession.getFile(
+
+                    CoroutineScope(Dispatchers.IO).launch {
+                        when (blockstackCalendar.type) {
+                            "private" -> {
+                                val path = blockstackCalendar.data.optString("src")
+                                Log.d(TAG, "events for ${blockstackCalendar.type} from $path")
+                                mBlockstackSession.getFile(path, GetFileOptions()) {
+                                    if (it.hasValue) {
+                                        val eventsAsString = it.value as String
+                                        Log.d(TAG, "events from gaia\n$eventsAsString")
+                                        val events = JSONObject(eventsAsString)
+                                        cont.resume(events)
+                                    } else {
+                                        Log.e(TAG, "Failed to fetch events: " + it.error)
+                                        cont.resumeWithException(IOException(it.error!!.message))
+                                    }
+                                }
+                            }
+                            "blockstack-user" -> {
+                                val path = blockstackCalendar.data.optString("src")
+                                Log.d(
+                                    TAG,
+                                    "events for ${blockstackCalendar.type} from $path ignored"
+                                )
+                                /*mBlockstackSession.getFile(
                                 path,
                                 GetFileOptions(username = data.optString("user"), decrypt = false),
                                 callback
                             )*/
-                        }
-                        "ics" -> {
-                            // TODO
-                            Log.d(
-                                TAG,
-                                "events for ${blockstackCalendar.type} ignored (${blockstackCalendar.data.optString(
-                                    "src"
-                                )}"
-                            )
+                            }
+                            "ics" -> {
+                                // TODO
+                                Log.d(
+                                    TAG,
+                                    "events for ${blockstackCalendar.type} ignored (${blockstackCalendar.data.optString(
+                                        "src"
+                                    )}"
+                                )
+                            }
                         }
                     }
                 }
@@ -298,23 +281,23 @@ internal class SyncAdapter : AbstractThreadedSyncAdapter {
         try {
             if (mBlockstackSession.isUserSignedIn()) {
                 val calendars = suspendCoroutine<JSONArray> { cont ->
-                    val callback: (Result<Any>) -> Unit = {
-                        if (it.hasValue) {
-
-                            val calendarsAsString = it.value as String
-                            val calendars = JSONArray(calendarsAsString)
-                            for (i in 0 until calendars.length()) {
-                                val calendar = calendars.getJSONObject(i)
-                                Log.d(TAG, calendar.toString())
+                    CoroutineScope(Dispatchers.IO).launch {
+                        mBlockstackSession.getFile("Calendars", GetFileOptions()) {
+                            if (it.hasValue) {
+                                val calendarsAsString = it.value as String
+                                val calendars = JSONArray(calendarsAsString)
+                                for (i in 0 until calendars.length()) {
+                                    val calendar = calendars.getJSONObject(i)
+                                    Log.d(TAG, calendar.toString())
+                                }
+                                cont.resume(calendars)
+                            } else {
+                                Log.e(TAG, "Failed to fetch calendars: " + it.error)
+                                cont.resumeWithException(IOException(it.error!!.message))
                             }
-                            cont.resume(calendars)
-                        } else {
-                            Log.e(TAG, "Failed to fetch calendars: " + it.error)
-                            cont.resumeWithException(IOException(it.error!!.message))
                         }
                     }
 
-                    mBlockstackSession.getFile("Calendars", GetFileOptions(), callback)
                 }
                 Log.d(TAG, calendars.toString())
                 return calendars
@@ -527,7 +510,7 @@ internal class SyncAdapter : AbstractThreadedSyncAdapter {
     }
 
 
-    private fun updateRemoteEvents(
+    private suspend fun updateRemoteEvents(
         eventsResult: BlockstackEventList,
         account: Account,
         syncResult: SyncResult

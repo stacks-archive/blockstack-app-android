@@ -17,8 +17,8 @@ import me.uport.sdk.jwt.InvalidJWTException
 import me.uport.sdk.jwt.JWTEncodingException
 import me.uport.sdk.jwt.JWTUtils
 import me.uport.sdk.jwt.model.JwtHeader
+import org.blockstack.android.sdk.BaseScope
 import org.blockstack.android.sdk.BlockstackSignIn
-import org.blockstack.android.sdk.Scope
 import org.blockstack.android.sdk.SessionStore
 import org.blockstack.android.sdk.model.BlockstackConfig
 import org.blockstack.app.R
@@ -125,13 +125,13 @@ class FrontDoorActivity : Activity() {
             authRequestToken
         } else {
             val blockstackSignIn = BlockstackSignIn(
+                SessionStore(PreferenceManager.getDefaultSharedPreferences(this)),
                 BlockstackConfig(
                     URI(intent.getStringExtra(KEY_DOMAIN)),
                     "",
                     "",
-                    arrayOf(Scope.StoreWrite)
-                ),
-                SessionStore(PreferenceManager.getDefaultSharedPreferences(this))
+                    arrayOf(BaseScope.StoreWrite.scope)
+                )
             )
             val keyPair = CryptoAPI.keyPairGenerator.generate()
             val transitPrivateKey = keyPair.privateKey.key.toHexStringNoPrefix()

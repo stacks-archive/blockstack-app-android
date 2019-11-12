@@ -20,20 +20,18 @@ import androidx.core.content.PermissionChecker
 import kotlinx.android.synthetic.main.activity_account.*
 import kotlinx.android.synthetic.main.content_account.*
 import kotlinx.coroutines.*
+import org.blockstack.android.sdk.BaseScope
 import org.blockstack.android.sdk.BlockstackSignIn
-import org.blockstack.android.sdk.Scope
 import org.blockstack.android.sdk.SessionStore
 import org.blockstack.android.sdk.model.BlockstackConfig
 import org.blockstack.android.sdk.model.UserData
 import org.blockstack.app.data.AuthRepository
 import org.blockstack.app.data.SyncUtils
-import org.json.JSONObject.NULL
 import org.kethereum.crypto.CryptoAPI
 import org.kethereum.extensions.toHexStringNoPrefix
 import org.openintents.calendar.sync.R
 import org.openintents.calendar.sync.blockstackConfig
 import org.openintents.distribution.about.About
-import java.lang.Runnable
 import java.net.URI
 import java.util.*
 
@@ -86,13 +84,13 @@ class AccountActivity : AppCompatActivity() {
 
         CoroutineScope(Dispatchers.Main).launch {
             val signIn = BlockstackSignIn(
+                SessionStore(PreferenceManager.getDefaultSharedPreferences(this@AccountActivity)),
                 BlockstackConfig(
                     URI("https://cal.openintents.org"),
                     "/",
                     "/manifest.json",
-                    arrayOf(Scope.StoreWrite)
-                ),
-                SessionStore(PreferenceManager.getDefaultSharedPreferences(this@AccountActivity))
+                    arrayOf(BaseScope.StoreWrite.scope)
+                )
             )
             val keyPair = CryptoAPI.keyPairGenerator.generate()
             val transitPrivateKey = keyPair.privateKey.key.toHexStringNoPrefix()
