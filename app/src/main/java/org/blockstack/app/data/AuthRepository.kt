@@ -2,37 +2,41 @@ package org.blockstack.app.data
 
 import android.content.Context
 import android.net.Uri
+import android.text.TextUtils
 import android.util.Log
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import me.uport.sdk.jwt.model.JwtHeader
+import kotlinx.coroutines.*
 import okhttp3.OkHttpClient
+import okhttp3.Response
+import okio.ByteString
 import org.blockstack.android.sdk.Blockstack
 import org.blockstack.android.sdk.DIDs
-import org.blockstack.android.sdk.model.BlockstackAccount
-import org.blockstack.android.sdk.model.BlockstackIdentity
-import org.blockstack.android.sdk.model.UserData
-import org.blockstack.app.ui.toAuthRequest
+import org.blockstack.android.sdk.Scope
+import org.blockstack.android.sdk.model.*
+import org.blockstack.app.ui.permissions.COLLECTION_SCOPE_PREFIX
 import org.json.JSONObject
 import org.kethereum.crypto.getCompressedPublicKey
+import org.kethereum.crypto.toECKeyPair
 import org.kethereum.encodings.encodeToBase58String
+import org.kethereum.extensions.toHexStringNoPrefix
 import org.kethereum.hashes.ripemd160
 import org.kethereum.hashes.sha256
 import org.kethereum.model.ECKeyPair
+import org.kethereum.model.PrivateKey
 import org.komputing.khex.extensions.hexToByteArray
 import org.komputing.khex.extensions.toNoPrefixHexString
-import java.security.InvalidParameterException
 import java.util.*
 
 
 /**
  * Class that requests authentication and user information.
  */
+const val GAIA_HUB_COLLECTION_KEY_FILE_NAME = ".collections.keys"
 
 class AuthRepository private constructor(
     val userDataSource: UserDataSource,
     val walletSource: WalletSource,
     val blockstack: Blockstack,
+    val hub: Hub,
     val syncUtils: SyncUtils
 ) {
 
@@ -147,43 +151,186 @@ class AuthRepository private constructor(
         return false
     }
 
-    suspend fun logUserInFor(
-        domain: String,
-        authRequest: String,
-        decodedToken: Triple<JwtHeader, JSONObject, ByteArray>
-    ): ExtendedBlockstackAccount {
-        val isValid = blockstack.verifyAuthRequest(authRequest)
-        if (!isValid) {
-            throw InvalidParameterException("invalid token")
-        }
-        val authResponse = blockstack.makeAuthResponse(account!!.blockstackAccount, authRequest)
-        val permissions = if (loginStates.contains(domain)) {
-            loginStates.getValue(domain).permissions
-        } else {
-            mutableListOf()
-        }
-        Log.d(TAG, blockstack.decodeToken(authResponse).second.toString())
-        loginStates[domain] =
-            LoginState(decodedToken.second.toAuthRequest(), authResponse, permissions)
-        return account!!
+    suspend fun logInWithAuthRequest(authRequest: AuthRequest): ExtendedBlockstackAccount {
+        val extendedBlockstackAccount = account!!
+        val domain = authRequest.domain
+        val scopes = authRequest.scopes.map { Scope(it) }.toTypedArray()
+        val authResponse =
+            if (TextUtils.isEmpty(authRequest.transitKey)) {
+                blockstack.makeAuthResponseUnencrypted(
+                    extendedBlockstackAccount.blockstackAccount,
+                    domain,
+                    scopes
+                )
+            } else {
+                val token = authRequest.encodedAuthRequest
+                if (token != null) {
+                    blockstack.makeAuthResponse(
+                        extendedBlockstackAccount.blockstackAccount,
+                        token,
+                        scopes
+                    )
+                } else {
+                    return extendedBlockstackAccount
+                }
+            }
+        processCollectionScopes(authRequest, authResponse, account!!.gaiaHubUrl, account!!.settings)
+        updateLoginState(authRequest, authResponse)
+        return extendedBlockstackAccount
     }
 
 
-    suspend fun logUserInFor(domain: String, scopes: ArrayList<String>): AuthRequest {
-        val authResponse = withContext(Dispatchers.IO) {
-            blockstack.makeAuthResponseUnencrypted(account!!.blockstackAccount, domain)
+    private suspend fun processCollectionScopes(
+        authRequest: AuthRequest,
+        authResponse: String,
+        gaiaHubUrl: String,
+        identitySettings: IdentitySettings
+    ) {
+        val appPrivateKey = account!!.blockstackAccount.getAppsNode().getAppNode(authRequest.domain).getPrivateKeyHex()
+        val collectionsNode = account!!.blockstackAccount.getCollectionsNode()
+        val collectionScopes =
+            authRequest.scopes.filter { s -> s.startsWith(COLLECTION_SCOPE_PREFIX) }
+        val collectionKeys =
+            fetchOrCreateCollectionKeys(collectionScopes, collectionsNode, identitySettings)
+        val collectionHubConfigs =
+            getCollectionGaiaHubConfigs(collectionScopes, collectionsNode, gaiaHubUrl)
+        updateAppCollectionKeys(
+            collectionScopes,
+            appPrivateKey,
+            gaiaHubUrl,
+            collectionKeys,
+            collectionHubConfigs
+        )
+    }
+
+    private suspend fun updateAppCollectionKeys(
+        collectionScopes: List<String>,
+        appPrivateKey: String,
+        gaiaHubUrl: String,
+        collectionKeys: List<String>,
+        collectionHubConfigs: List<GaiaHubConfig>
+    ) {
+        val hubConfig = hub.connectToGaia(gaiaHubUrl, appPrivateKey, null)
+        val keyFile = getAppCollectionKeyFile(appPrivateKey, hubConfig.urlPrefix, hubConfig.address)
+        collectionScopes.mapIndexed { index, scope ->
+            keyFile.put(
+                scope,
+                CollectionKey(collectionKeys[index], collectionHubConfigs[index]).json
+            )
+            true
         }
-        val permissions = if (loginStates.contains(domain)) {
+        val response = writeCollectionKeysToAppStorage(appPrivateKey, hubConfig, keyFile)
+        Log.d(TAG, response.toString())
+    }
+
+    private suspend fun writeCollectionKeysToAppStorage(
+        appPrivateKey: String?,
+        hubConfig: GaiaHubConfig,
+        keyFile: JSONObject
+    ): Response {
+        Log.d(TAG, keyFile.toString())
+        val publicKey = PrivateKey(appPrivateKey!!).toECKeyPair().toHexPublicKey64()
+        val encryptedKeyFile = blockstack.encryptContent(keyFile.toString(),CryptoOptions( publicKey = publicKey))
+        Log.d(TAG, encryptedKeyFile.value?.cipherText ?: encryptedKeyFile.error?.toString())
+        return hub.uploadToGaiaHub(
+            GAIA_HUB_COLLECTION_KEY_FILE_NAME,
+            ByteString.encodeString(encryptedKeyFile.value!!.json.toString(), Charsets.UTF_8),
+            hubConfig,
+            "application/json"
+        )
+
+    }
+
+    private suspend fun getAppCollectionKeyFile(
+        appPrivateKey: String?,
+        gaiaHubBucketUrl: String,
+        appBucketAddress: String
+    ): JSONObject {
+        val GAIA_HUB_COLLECTION_KEY_FILE_NAME = ".collection"
+        val keyFileUrl = "$gaiaHubBucketUrl$appBucketAddress/$GAIA_HUB_COLLECTION_KEY_FILE_NAME"
+        val response = hub.getFromGaiaHub(keyFileUrl)
+        if (response.isSuccessful) {
+            val keyFileResult = blockstack.decryptContent(
+                response.body()!!.string(),
+                false,
+                CryptoOptions(privateKey = appPrivateKey)
+            )
+            return JSONObject(keyFileResult.value as String)
+        } else {
+            return JSONObject()
+        }
+    }
+
+    private suspend fun getCollectionGaiaHubConfigs(
+        scopes: List<String>,
+        collectionsNode: CollectionsNode,
+        gaiaHubUrl: String
+    ): List<GaiaHubConfig> {
+
+        return scopes.map { scope ->
+            CoroutineScope(Dispatchers.IO).async {
+                val collectionPrivateKey =
+                    collectionsNode.getCollectionNode(scope)
+                        .keys.keyPair.privateKey.key.toHexStringNoPrefix()
+                val gaiaScopes = arrayOf(AuthScope.COLLECTION_AUTH_SCOPE)
+
+                hub.connectToGaia(gaiaHubUrl, collectionPrivateKey, "", gaiaScopes)
+            }
+        }.awaitAll()
+    }
+
+    private suspend fun fetchOrCreateCollectionKeys(
+        scopes: List<String>,
+        collectionsNode: CollectionsNode,
+        settings: IdentitySettings
+    ): List<String> {
+        return scopes.map { scope ->
+            CoroutineScope(Dispatchers.IO).async {
+                val encryptionKeyIndex = getCollectionEncryptionIndex(scope, settings)
+                collectionsNode.getCollectionEncryptionNode(scope, encryptionKeyIndex)
+                    .keys.keyPair.privateKey.key.toHexStringNoPrefix()
+            }
+
+        }.awaitAll()
+    }
+
+    private suspend fun getCollectionEncryptionIndex(
+        scope: String,
+        settings: IdentitySettings
+    ): Int {
+        return 0
+    }
+
+
+    private fun updateLoginState(
+        authRequest: AuthRequest,
+        authResponse: String
+    ) {
+        val domain = authRequest.domain
+        val grantedPermissions = if (loginStates.contains(domain)) {
             loginStates.getValue(domain).permissions
         } else {
             mutableListOf()
         }
-        val authRequest = unencryptedAuthRequest(
-            domain, scopes
-        )
+        loginStates[domain] =
+            LoginState(authRequest, authResponse, grantedPermissions)
+    }
+
+    fun setNewLoginState(
+        authRequest: AuthRequest
+    ) {
+        val domain = authRequest.domain
+        val lastLoginState = if (loginStates.contains(domain)) {
+            loginStates.getValue(domain)
+        } else {
+            null
+        }
+
+        val permissions = lastLoginState?.permissions ?: mutableListOf()
+        val authResponse = lastLoginState?.authResponse ?: ""
+
         loginStates[domain] =
             LoginState(authRequest, authResponse, permissions)
-        return authRequest
     }
 
 
@@ -196,6 +343,9 @@ class AuthRepository private constructor(
             val currentScopes = loginStates.getValue(domain).permissions.map { p -> p.scope }
             for (scope in scopes) {
                 if (currentScopes.indexOf(scope) == 0) {
+                    if (scope.startsWith(COLLECTION_SCOPE_PREFIX)) {
+
+                    }
                     loginStates.getValue(domain).permissions.add(Permission(scope))
                 }
             }
@@ -274,15 +424,25 @@ class AuthRepository private constructor(
         @Synchronized
         private fun createInstance(context: Context) {
             if (instance == null) {
+                val callFactory = OkHttpClient()
                 instance = AuthRepository(
-                    userDataSource = UserDataSource(context, OkHttpClient()),
+                    userDataSource = UserDataSource(context, callFactory),
                     walletSource = WalletSource(context),
-                    blockstack = Blockstack(),
+                    blockstack = Blockstack(callFactory),
+                    hub = Hub(callFactory),
                     syncUtils = SyncUtils(context)
                 )
             }
         }
     }
+}
+
+data class CollectionKey(val encryptionKey: String, val hubConfig: GaiaHubConfig) {
+    val json: JSONObject
+        get() = JSONObject()
+            .put("encryptionKey", encryptionKey)
+            .put("hubConfig", hubConfig)
+
 }
 
 private fun DIDs.Companion.addressToDID(ownerAddress: String): String = "did:btc-addr:$ownerAddress"

@@ -3,11 +3,13 @@ package org.blockstack.app.ui
 import android.accounts.AccountAuthenticatorResponse
 import android.accounts.AccountManager
 import android.accounts.AccountManager.KEY_AUTHTOKEN
-import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.preference.PreferenceManager
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,6 +26,7 @@ import org.blockstack.android.sdk.model.BlockstackConfig
 import org.blockstack.app.R
 import org.blockstack.app.data.AuthRepository
 import org.blockstack.app.data.AuthRequest
+import org.blockstack.app.data.unencryptedAuthRequest
 import org.blockstack.app.ui.auth.AuthenticatorActivity
 import org.blockstack.app.ui.identity.IdentityActivity
 import org.blockstack.app.ui.permissions.PermissionsActivity
@@ -35,12 +38,12 @@ import org.kethereum.crypto.CryptoAPI
 import org.kethereum.extensions.toHexStringNoPrefix
 import java.net.URI
 import java.util.*
+import kotlin.collections.ArrayList
 
 
-class FrontDoorActivity : Activity() {
+class FrontDoorActivity : AppCompatActivity() {
 
     private var currentAuthManagerResponse: AccountAuthenticatorResponse? = null
-    private var lastAuthRequest: AuthRequest? = null
     private lateinit var authRepository: AuthRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,25 +57,17 @@ class FrontDoorActivity : Activity() {
         } else if (intent.action == Intent.ACTION_VIEW) {
             CoroutineScope(Dispatchers.IO).launch {
                 authRepository.loadAccount()
-                val authRequest = getAuthRequest()
-                val decodedToken = decodeToken(authRequest)
+                val authRequestToken = getAuthRequestToken()
+                val decodedToken = decodeToken(authRequestToken)
                 val domain = decodedToken.second.getString("domain_name")
-                if (!authRepository.isLoggedInFor(domain)) {
-                    if (authRepository.isLoggedIn) {
-                        authRepository.logUserInFor(domain, authRequest, decodedToken)
-                        handleLoggedInUser(decodedToken.second.toAuthRequest())
 
-                    } else {
-                        startActivityForResult(
-                            Intent(this@FrontDoorActivity, AuthenticatorActivity::class.java),
-                            REQUEST_CODE_NEW_ACCOUNT
-                        )
-
-                    }
+                if (!authRepository.isLoggedInFor(domain) && !authRepository.isLoggedIn) {
+                    startActivityForResult(
+                        Intent(this@FrontDoorActivity, AuthenticatorActivity::class.java),
+                        REQUEST_CODE_NEW_ACCOUNT
+                    )
                 } else {
-                    authRepository.logUserInFor(domain, authRequest, decodedToken)
-                    handleLoggedInUser(decodedToken.second.toAuthRequest())
-
+                    startAuthenticationFlow(decodedToken.second.toAuthRequest(authRequestToken))
                 }
             }
         } else if (intent.action == ACTION_GET_AUTH_TOKEN) {
@@ -81,31 +76,27 @@ class FrontDoorActivity : Activity() {
                 val options = intent.getBundleExtra(KEY_OPTIONS)
                 val scopes = options.getStringArrayList(KEY_PERMISSIONS)
                 currentAuthManagerResponse =
-                    intent.getParcelableExtra<AccountAuthenticatorResponse>(
+                    intent.getParcelableExtra(
                         AccountManager.KEY_ACCOUNT_AUTHENTICATOR_RESPONSE
                     )
-                if (!authRepository.isLoggedInFor(domain)) {
-                    if (authRepository.isLoggedIn) {
-                        val authRequest = authRepository.logUserInFor(domain, scopes)
-                        handleLoggedInUser(authRequest)
-                    } else {
-                        startActivityForResult(
-                            Intent(this@FrontDoorActivity, AuthenticatorActivity::class.java),
-                            REQUEST_CODE_NEW_ACCOUNT
-                        )
-                    }
+
+                if (!authRepository.isLoggedInFor(domain) && !authRepository.isLoggedIn) {
+                    startActivityForResult(
+                        Intent(this@FrontDoorActivity, AuthenticatorActivity::class.java),
+                        REQUEST_CODE_NEW_ACCOUNT
+                    )
                 } else {
-                    val authRequest = authRepository.logUserInFor(domain, scopes)
-                    handleLoggedInUser(authRequest)
+                    startAuthenticationFlow(unencryptedAuthRequest(domain, scopes!!))
                 }
             }
         }
     }
 
-    private fun handleLoggedInUser(authRequest: AuthRequest) {
-        runOnUiThread {
-            showUserName(authRepository.account!!.displayName())
-        }
+    private suspend fun startAuthenticationFlow(
+        authRequest: AuthRequest
+    ) {
+        showUsername()
+        authRepository.setNewLoginState(authRequest)
         if (authRepository.shouldCheckPermissions(
                 authRequest.domain,
                 authRequest.scopes.toTypedArray()
@@ -113,15 +104,30 @@ class FrontDoorActivity : Activity() {
         ) {
             requestBlockstackPermissions(authRequest)
         } else {
-            finish()
+            authenticateUser(authRequest)
+            handleLoggedInUser(authRequest)
         }
     }
 
+    private suspend fun authenticateUser(authRequest: AuthRequest) {
+        authRepository.logInWithAuthRequest(authRequest)
+    }
 
-    private suspend fun getAuthRequest(): String {
+    private fun showUsername() {
+        runOnUiThread {
+            showUserName(authRepository.account!!.displayName())
+        }
+    }
+
+    private fun handleLoggedInUser(authRequest: AuthRequest) {
+        finish()
+    }
+
+
+    private suspend fun getAuthRequestToken(): String {
         val authRequestToken = intent.data.getQueryParameter("authRequest")
 
-        val authRequest = if (authRequestToken != null) {
+        return if (authRequestToken != null) {
             authRequestToken
         } else {
             val blockstackSignIn = BlockstackSignIn(
@@ -141,7 +147,6 @@ class FrontDoorActivity : Activity() {
                 emptyMap()
             )
         }
-        return authRequest
     }
 
     private fun requestBlockstackPermissions(authRequest: AuthRequest) {
@@ -165,42 +170,65 @@ class FrontDoorActivity : Activity() {
 
                 authRepository.addPermissions(domain, permissions)
 
+                // recover login state from where the flow moved to permission requests
                 val loginState = authRepository.loginStates[domain] ?: return
 
-                if (loginState.authRequest.redirectUrl.isEmpty()) {
-                    val response = Bundle()
-                    response.putString(KEY_AUTHTOKEN, loginState.authResponse)
-                    response.putString(
-                        AccountManager.KEY_ACCOUNT_NAME,
-                        authRepository.account!!.blockstackAccount.username
-                    )
-                    response.putString(AccountManager.KEY_ACCOUNT_TYPE, domain)
-                    currentAuthManagerResponse!!.onResult(response)
-                    setResult(
-                        RESULT_OK,
-                        Intent().putExtra(KEY_USER_DATA, authRepository.userDataForDomain(domain))
-                            .putExtra(AccountManager.KEY_AUTHTOKEN, loginState.authResponse)
-                            .putExtra(
-                                AccountManager.KEY_ACCOUNT_NAME,
-                                authRepository.account!!.blockstackAccount.username
-                            )
-                            .putExtra(AccountManager.KEY_ACCOUNT_TYPE, domain)
-                    )
-                } else {
-                    val uri = authRepository.uriForDomain(domain)
-                    startActivity(
-                        Intent(
-                            Intent.ACTION_VIEW, uri
+                lifecycleScope.launch(Dispatchers.IO) {
+                    authenticateUser(
+                        AuthRequest(
+                            domain,
+                            loginState.authRequest.transitKey,
+                            loginState.authRequest.redirectUrl,
+                            permissions,
+                            loginState.authRequest.encodedAuthRequest
                         )
                     )
 
+                    if (loginState.authRequest.transitKey.isEmpty()) {
+                        val response = Bundle()
+                        response.putString(KEY_AUTHTOKEN, loginState.authResponse)
+                        response.putString(
+                            AccountManager.KEY_ACCOUNT_NAME,
+                            authRepository.account!!.blockstackAccount.username
+                        )
+                        response.putString(AccountManager.KEY_ACCOUNT_TYPE, domain)
+                        currentAuthManagerResponse!!.onResult(response)
+                        setResult(
+                            RESULT_OK,
+                            Intent().putExtra(
+                                KEY_USER_DATA,
+                                authRepository.userDataForDomain(domain)
+                            )
+                                .putExtra(AccountManager.KEY_AUTHTOKEN, loginState.authResponse)
+                                .putExtra(
+                                    AccountManager.KEY_ACCOUNT_NAME,
+                                    authRepository.account!!.blockstackAccount.username
+                                )
+                                .putExtra(AccountManager.KEY_ACCOUNT_TYPE, domain)
+                        )
+                    } else {
+                        val uri = authRepository.uriForDomain(domain)
+                            ?: Uri.parse("https://github.com/blockstack/blockstack-app-android/issues/new")
+                        startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW, uri
+                            )
+                        )
+
+                    }
+                    finish()
                 }
-                finish()
 
             }
         } else if (requestCode == REQUEST_CODE_NEW_ACCOUNT) {
             if (resultCode == RESULT_OK) {
-                handleLoggedInUser(lastAuthRequest!!)
+                val domain = data?.getStringExtra(KEY_DOMAIN) ?: return
+                val authRequest = authRepository.loginStates[domain]?.authRequest
+                if (authRequest != null) {
+                    lifecycleScope.launch {
+                        startAuthenticationFlow(authRequest)
+                    }
+                }
             }
         }
     }
@@ -250,11 +278,12 @@ class FrontDoorActivity : Activity() {
     }
 }
 
-fun JSONObject.toAuthRequest(): AuthRequest {
+fun JSONObject. toAuthRequest(encodedAuthRequest: String): AuthRequest {
     val jsonScopes = JSONArray(getString("scopes"))
     val scopes = ArrayList<String>((0 until jsonScopes.length()).map { jsonScopes.getString(it) })
     return AuthRequest(
         getString("domain_name"),
-        getJSONArray("public_keys").getString(0), getString("redirect_uri"), scopes
+        getJSONArray("public_keys").getString(0), getString("redirect_uri"), scopes,
+        encodedAuthRequest
     )
 }

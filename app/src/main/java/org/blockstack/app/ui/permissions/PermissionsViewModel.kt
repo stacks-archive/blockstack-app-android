@@ -71,7 +71,14 @@ class PermissionsViewModel(
             )
             if (descriptionResId == 0) {
                 if (scope.startsWith(COLLECTION_SCOPE_PREFIX)) {
-                 Scope(scope, scope.substring(COLLECTION_SCOPE_PREFIX.length))
+                    Scope(
+                        scope,
+                        context.getString(
+                            R.string.collection,
+                            context.packageName,
+                            scope.substring(COLLECTION_SCOPE_PREFIX.length)
+                        )
+                    )
                 } else {
                     throw InvalidParameterException("$scope not supported")
                 }
@@ -85,9 +92,13 @@ class PermissionsViewModel(
             }
         }
         if (scopeStrings.indexOf(StoreWrite.scope.name) < 0) {
-            scopes = listOf(Scope(
-                StoreWrite.scope.name, context.getString(
-                R.string.store_write, packageName)))
+            scopes = listOf(
+                Scope(
+                    StoreWrite.scope.name, context.getString(
+                        R.string.store_write, packageName
+                    )
+                )
+            )
         }
         grantedPermissionList = arrayListOf()
         currentScopeIndex = 0

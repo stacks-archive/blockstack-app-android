@@ -18,6 +18,7 @@
     <string name="store_write">Allow <b>%1$s</b> to read your basic info?</string>
     <string name="email">Allow <b>%1$s</b> to use your email address?</string>
     <string name="publish_data">Allow <b>%1$s</b> to use publish data of this app in your name?</string>
+    <string name="collection">Allow <b>%1$s</b> to read and edit your %2$s list?</string>
     <string name="permissions">Blockstack Permissions</string>
     <string name="logged_in_as">Logged In as %1$s</string>
     <string name="blockstack_calendar">BS Calendar</string>

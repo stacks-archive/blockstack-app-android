@@ -17,6 +17,7 @@ import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.PermissionChecker
+import androidx.lifecycle.lifecycleScope
 import kotlinx.android.synthetic.main.activity_account.*
 import kotlinx.android.synthetic.main.content_account.*
 import kotlinx.coroutines.*
@@ -26,7 +27,9 @@ import org.blockstack.android.sdk.SessionStore
 import org.blockstack.android.sdk.model.BlockstackConfig
 import org.blockstack.android.sdk.model.UserData
 import org.blockstack.app.data.AuthRepository
+import org.blockstack.app.data.AuthRequest
 import org.blockstack.app.data.SyncUtils
+import org.blockstack.app.data.toHexPublicKey64
 import org.kethereum.crypto.CryptoAPI
 import org.kethereum.extensions.toHexStringNoPrefix
 import org.openintents.calendar.sync.R
@@ -82,7 +85,7 @@ class AccountActivity : AppCompatActivity() {
 
         authRepository = AuthRepository.getInstance(this)
 
-        CoroutineScope(Dispatchers.Main).launch {
+        lifecycleScope.launch(Dispatchers.Main) {
             val signIn = BlockstackSignIn(
                 SessionStore(PreferenceManager.getDefaultSharedPreferences(this@AccountActivity)),
                 BlockstackConfig(
@@ -94,14 +97,14 @@ class AccountActivity : AppCompatActivity() {
             )
             val keyPair = CryptoAPI.keyPairGenerator.generate()
             val transitPrivateKey = keyPair.privateKey.key.toHexStringNoPrefix()
-            val authRequest =
-                signIn.makeAuthRequest(transitPrivateKey, Date().time + 3600 * 24 * 7, emptyMap())
-            val decodedToken = authRepository.blockstack.decodeToken(authRequest)
             withContext(Dispatchers.IO) {
-                authRepository.logUserInFor(
-                    "https://cal.openintents.org",
-                    authRequest,
-                    decodedToken
+                authRepository.logInWithAuthRequest(
+                    AuthRequest(
+                        domain = "https://cal.openintents.org",
+                        transitKey = keyPair.toHexPublicKey64(),
+                        redirectUrl = "https://cal.openintents.org/",
+                        scopes = arrayListOf(BaseScope.StoreWrite.scope.name)
+                    )
                 )
                 onLoaded()
             }
