@@ -1,1 +1,2 @@
-include ':app', ':calendar', ':notes'
+include ':app', ':calendar', ':notes', ":blockstack"
+project(":blockstack").projectDir = file("../blockstack-android/blockstack-sdk")

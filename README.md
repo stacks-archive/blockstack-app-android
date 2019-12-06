@@ -5,3 +5,5 @@ Proof of concept for a native implementation on Android for Blockstack authentic
 storage and identity.
 
 This is pre-alpha code. DO NOT ENTER ANY VALUABLE DATA, like personal keys!
+
+Requires blockstack-android repo to be placed next to this repo.

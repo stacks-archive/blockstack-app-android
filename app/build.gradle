@@ -38,6 +38,7 @@ android {
 
 dependencies {
     implementation project (':calendar')
+    implementation project(":blockstack")
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
     implementation 'androidx.appcompat:appcompat:1.1.0'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.1.0'
@@ -48,7 +49,6 @@ dependencies {
     implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
     implementation 'androidx.lifecycle:lifecycle-extensions:2.1.0'
     implementation 'com.squareup.picasso:picasso:2.71828'
-    implementation "com.github.blockstack:blockstack-android:$blockstack_version"
     implementation 'com.github.tobiasschuerg:android-prefix-suffix-edit-text:1.2.2'
 
     implementation "com.github.komputing.kethereum:base58:$kethereum_version"
