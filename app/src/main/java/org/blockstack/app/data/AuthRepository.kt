@@ -279,7 +279,7 @@ class AuthRepository private constructor(
         }.awaitAll()
     }
 
-    private suspend fun fetchOrCreateCollectionKeys(
+    suspend fun fetchOrCreateCollectionKeys(
         scopes: List<String>,
         collectionsNode: CollectionsNode,
         settings: IdentitySettings
@@ -441,7 +441,7 @@ data class CollectionKey(val encryptionKey: String, val hubConfig: GaiaHubConfig
     val json: JSONObject
         get() = JSONObject()
             .put("encryptionKey", encryptionKey)
-            .put("hubConfig", hubConfig)
+            .put("hubConfig", hubConfig.json)
 
 }
 

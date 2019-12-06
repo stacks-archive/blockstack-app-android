@@ -6,6 +6,8 @@ import kotlinx.coroutines.runBlocking
 import org.blockstack.android.sdk.model.BlockstackAccount
 import org.blockstack.android.sdk.model.BlockstackIdentity
 import org.blockstack.app.data.AuthRepository
+import org.blockstack.app.data.ExtendedBlockstackAccount
+import org.blockstack.app.data.IdentitySettings
 import org.blockstack.app.data.Result
 import org.blockstack.app.ui.identity.IdentityActivity
 import org.hamcrest.MatcherAssert.assertThat
@@ -27,6 +29,7 @@ import java.util.concurrent.CountDownLatch
 private val SEED_PHRASE =
     "sound idle panel often situate develop unit text design antenna vendor screen opinion balcony share trigger accuse scatter visa uniform brass update opinion media"
 private val BTC_ADDRESS = "1JeTQ5cQjsD57YGcsVFhwT7iuQUXJR6BSk"
+private val CONTACT_COLLECTION_ADDRESS = "1JantK5XX6e1irho6CUeWqq1tKvMFP6iUK"
 
 @RunWith(AndroidJUnit4::class)
 class AuthRespositoryTest {
@@ -44,18 +47,14 @@ class AuthRespositoryTest {
 
     @Test
     fun testRestore() {
-        val latch = CountDownLatch(1)
-        var result: Result<BlockstackAccount>? = null
+        var result: ExtendedBlockstackAccount? = null
         runBlocking {
-            authRespository.restoreIdentity(SEED_PHRASE) {
-                result = it
-                latch.countDown()
-            }
+            result = authRespository.restoreIdentity(SEED_PHRASE)
         }
-        latch.await()
-        assertThat(result is Result.Success, `is` (true))
-        assertThat((result as Result.Success).data.ownerAddress, `is`(BTC_ADDRESS))
+
+        assertThat(result?.blockstackAccount?.ownerAddress, `is`(BTC_ADDRESS))
     }
+
 
     @Test
     fun testRestore2() {
@@ -64,5 +63,21 @@ class AuthRespositoryTest {
         val keys = identity.identityKeys.generateChildKey(BIP44Element(true, 0))
         val account = BlockstackAccount(null, keys, identity.salt)
         assertThat(account.ownerAddress, `is`(BTC_ADDRESS))
+    }
+
+    @Test
+    fun testContactCollection() {
+        runBlocking {
+            authRespository.restoreIdentity(SEED_PHRASE)
+        }
+        val collectionKeys = runBlocking {
+            authRespository.fetchOrCreateCollectionKeys(
+                listOf("collection.Contact"),
+                authRespository.account!!.blockstackAccount.getCollectionsNode(),
+                IdentitySettings(0)
+            )
+        }
+        assertThat(collectionKeys[0], `is`("7dd0e43bbd50d98558690a501922badc16232848281606f3a195e20b52cc176f"))
+
     }
 }
